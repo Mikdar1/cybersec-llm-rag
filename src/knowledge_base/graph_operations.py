@@ -8,6 +8,7 @@ relationship queries across all ATT&CK object types.
 
 Functions:
     get_context_from_knowledge_base: Main context retrieval for LLM queries
+    get_selective_context_from_knowledge_base: Optimized context retrieval with selective querying
     search_techniques: Search ATT&CK techniques by various criteria
     search_malware: Search malware families and variants
     search_threat_groups: Search APT groups and threat actors
@@ -18,6 +19,266 @@ Functions:
     get_knowledge_base_stats: Retrieve database statistics
     get_technique_relationships: Get technique relationship mappings
 """
+
+
+def get_selective_context_from_knowledge_base(graph, keywords, relevant_types):
+    """
+    Retrieve targeted cybersecurity context from the ATT&CK knowledge base.
+    
+    Performs selective search across specified ATT&CK object types using
+    optimized keywords to reduce query overhead and improve response relevance.
+    
+    Args:
+        graph: Neo4j database connection instance
+        keywords (list): List of search keywords/terms
+        relevant_types (list): List of ATT&CK object types to search
+        
+    Returns:
+        str: Structured context data organized by object type
+    """
+    try:
+        context = []
+        search_query = " OR ".join([f"'{keyword}'" for keyword in keywords])
+        
+        # Create a flexible search pattern for all keywords
+        keyword_conditions = []
+        for keyword in keywords:
+            keyword_conditions.extend([
+                f"toLower({{field}}) CONTAINS toLower('{keyword}')",
+                f"'{keyword.upper()}' IN {{field}}"  # For technique IDs like T1055
+            ])
+        
+        # Search ATT&CK techniques
+        if 'techniques' in relevant_types:
+            technique_query = """
+            MATCH (t:Technique)
+            WHERE """ + " OR ".join([
+                cond.format(field="t.name") for cond in keyword_conditions
+            ] + [
+                cond.format(field="t.description") for cond in keyword_conditions
+            ] + [
+                cond.format(field="t.technique_id") for cond in keyword_conditions
+            ]) + """
+            RETURN t.technique_id as technique_id, 
+                   t.name as name, 
+                   t.description as description, 
+                   t.tactics as tactics,
+                   t.citations as citations,
+                   t.platforms as platforms
+            LIMIT 5
+            """
+            
+            technique_results = graph.query(technique_query)
+            
+            if technique_results:
+                context.append("=== ATT&CK TECHNIQUES ===")
+                for result in technique_results:
+                    context.append(f"\nTechnique: {result['technique_id']} - {result['name']}")
+                    context.append(f"Tactics: {', '.join(result.get('tactics', []))}")
+                    context.append(f"Platforms: {', '.join(result.get('platforms', []))}")
+                    context.append(f"Description: {result['description'][:300]}...")
+                    
+                    # Add citations if available
+                    citations = result.get('citations', [])
+                    if citations and len(citations) > 0:
+                        context.append(f"Citations: {len(citations)} references available")
+        
+        # Search malware families
+        if 'malware' in relevant_types:
+            malware_query = """
+            MATCH (m:Malware)
+            WHERE """ + " OR ".join([
+                cond.format(field="m.name") for cond in keyword_conditions
+            ] + [
+                cond.format(field="m.description") for cond in keyword_conditions
+            ]) + """
+            RETURN m.name as name, 
+                   m.description as description, 
+                   m.labels as labels,
+                   m.citations as citations
+            LIMIT 5
+            """
+            
+            malware_results = graph.query(malware_query)
+            
+            if malware_results:
+                context.append("\n=== MALWARE ===")
+                for result in malware_results:
+                    context.append(f"\nMalware: {result['name']}")
+                    context.append(f"Labels: {', '.join(result.get('labels', []))}")
+                    context.append(f"Description: {result['description'][:300]}...")
+                    
+                    # Add citations if available
+                    citations = result.get('citations', [])
+                    if citations and len(citations) > 0:
+                        context.append(f"Citations: {len(citations)} references available")
+        
+        # Search threat groups
+        if 'threat_groups' in relevant_types:
+            group_query = """
+            MATCH (g:ThreatGroup)
+            WHERE """ + " OR ".join([
+                cond.format(field="g.name") for cond in keyword_conditions
+            ] + [
+                cond.format(field="g.description") for cond in keyword_conditions
+            ] + [
+                f"ANY(alias IN g.aliases WHERE toLower(alias) CONTAINS toLower('{keyword}'))" 
+                for keyword in keywords
+            ]) + """
+            RETURN g.name as name, 
+                   g.description as description, 
+                   g.aliases as aliases,
+                   g.citations as citations
+            LIMIT 5
+            """
+            
+            group_results = graph.query(group_query)
+            
+            if group_results:
+                context.append("\n=== THREAT GROUPS ===")
+                for result in group_results:
+                    context.append(f"\nThreat Group: {result['name']}")
+                    if result.get('aliases'):
+                        context.append(f"Aliases: {', '.join(result['aliases'])}")
+                    context.append(f"Description: {result['description'][:300]}...")
+                    
+                    # Add citations if available
+                    citations = result.get('citations', [])
+                    if citations and len(citations) > 0:
+                        context.append(f"Citations: {len(citations)} references available")
+        
+        # Search tools
+        if 'tools' in relevant_types:
+            tool_query = """
+            MATCH (t:Tool)
+            WHERE """ + " OR ".join([
+                cond.format(field="t.name") for cond in keyword_conditions
+            ] + [
+                cond.format(field="t.description") for cond in keyword_conditions
+            ]) + """
+            RETURN t.name as name, 
+                   t.description as description, 
+                   t.labels as labels,
+                   t.citations as citations
+            LIMIT 5
+            """
+            
+            tool_results = graph.query(tool_query)
+            
+            if tool_results:
+                context.append("\n=== TOOLS ===")
+                for result in tool_results:
+                    context.append(f"\nTool: {result['name']}")
+                    context.append(f"Labels: {', '.join(result.get('labels', []))}")
+                    context.append(f"Description: {result['description'][:300]}...")
+                    
+                    # Add citations if available
+                    citations = result.get('citations', [])
+                    if citations and len(citations) > 0:
+                        context.append(f"Citations: {len(citations)} references available")
+        
+        # Search mitigations
+        if 'mitigations' in relevant_types:
+            mitigation_query = """
+            MATCH (m:Mitigation)
+            WHERE """ + " OR ".join([
+                cond.format(field="m.name") for cond in keyword_conditions
+            ] + [
+                cond.format(field="m.description") for cond in keyword_conditions
+            ] + [
+                cond.format(field="m.mitigation_id") for cond in keyword_conditions
+            ]) + """
+            RETURN m.mitigation_id as mitigation_id, m.name as name, m.description as description, m.citations as citations
+            LIMIT 5
+            """
+            
+            mitigation_results = graph.query(mitigation_query)
+            
+            if mitigation_results:
+                context.append("\n=== MITIGATIONS ===")
+                for result in mitigation_results:
+                    context.append(f"\nMitigation: {result['mitigation_id']} - {result['name']}")
+                    context.append(f"Description: {result['description'][:300]}...")
+                    
+                    # Add citations if available
+                    citations = result.get('citations', [])
+                    if citations and len(citations) > 0:
+                        context.append(f"Citations: {len(citations)} references available")
+        
+        # Search data sources
+        if 'data_sources' in relevant_types:
+            data_source_query = """
+            MATCH (ds:DataSource)
+            WHERE """ + " OR ".join([
+                cond.format(field="ds.name") for cond in keyword_conditions
+            ] + [
+                cond.format(field="ds.description") for cond in keyword_conditions
+            ]) + """
+            RETURN ds.name as name, ds.description as description, ds.platforms as platforms
+            LIMIT 5
+            """
+            
+            data_source_results = graph.query(data_source_query)
+            
+            if data_source_results:
+                context.append("\n=== DATA SOURCES ===")
+                for result in data_source_results:
+                    context.append(f"\nData Source: {result['name']}")
+                    context.append(f"Platforms: {', '.join(result.get('platforms', []))}")
+                    context.append(f"Description: {result['description'][:300]}...")
+        
+        # Search campaigns
+        if 'campaigns' in relevant_types:
+            campaign_query = """
+            MATCH (c:Campaign)
+            WHERE """ + " OR ".join([
+                cond.format(field="c.name") for cond in keyword_conditions
+            ] + [
+                cond.format(field="c.description") for cond in keyword_conditions
+            ] + [
+                f"ANY(alias IN c.aliases WHERE toLower(alias) CONTAINS toLower('{keyword}'))" 
+                for keyword in keywords
+            ]) + """
+            RETURN c.name as name, c.description as description, c.aliases as aliases, c.first_seen as first_seen
+            LIMIT 5
+            """
+            
+            campaign_results = graph.query(campaign_query)
+            
+            if campaign_results:
+                context.append("\n=== CAMPAIGNS ===")
+                for result in campaign_results:
+                    context.append(f"\nCampaign: {result['name']}")
+                    if result.get('aliases'):
+                        context.append(f"Aliases: {', '.join(result['aliases'])}")
+                    context.append(f"Description: {result['description'][:300]}...")
+        
+        # If no results found with selective search, fall back to broader search
+        if not context:
+            context.append("=== BROADER SEARCH RESULTS ===")
+            broad_query = """
+            MATCH (n)
+            WHERE """ + " OR ".join([
+                cond.format(field="n.name") for cond in keyword_conditions[:2]  # Limit to avoid complexity
+            ] + [
+                cond.format(field="n.description") for cond in keyword_conditions[:2]
+            ]) + """
+            RETURN labels(n) as type, n.name as name, n.description as description
+            LIMIT 10
+            """
+            
+            broad_results = graph.query(broad_query)
+            
+            for result in broad_results:
+                entity_type = result.get('type', ['Unknown'])[0] if result.get('type') else 'Unknown'
+                context.append(f"\n{entity_type}: {result.get('name', 'N/A')}")
+                if result.get('description'):
+                    context.append(f"Description: {result['description'][:200]}...")
+        
+        return "\n".join(context) if context else "No relevant information found in the knowledge base."
+    
+    except Exception as e:
+        raise Exception(f"Error in selective knowledge base query: {e}")
 
 
 def get_context_from_knowledge_base(graph, query):
@@ -45,7 +306,8 @@ def get_context_from_knowledge_base(graph, query):
         RETURN t.technique_id as technique_id, 
                t.name as name, 
                t.description as description, 
-               t.tactics as tactics
+               t.tactics as tactics,
+               t.citations as citations
         LIMIT 10
         """
         technique_results = graph.query(technique_query, params={"query": query})
@@ -56,7 +318,8 @@ def get_context_from_knowledge_base(graph, query):
         WHERE m.name CONTAINS $query OR m.description CONTAINS $query
         RETURN m.name as name, 
                m.description as description, 
-               m.labels as labels
+               m.labels as labels,
+               m.citations as citations
         LIMIT 10
         """
         malware_results = graph.query(malware_query, params={"query": query})
@@ -69,7 +332,8 @@ def get_context_from_knowledge_base(graph, query):
            OR ANY(alias IN g.aliases WHERE alias CONTAINS $query)
         RETURN g.name as name, 
                g.description as description, 
-               g.aliases as aliases
+               g.aliases as aliases,
+               g.citations as citations
         LIMIT 10
         """
         group_results = graph.query(group_query, params={"query": query})

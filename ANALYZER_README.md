@@ -1,48 +1,92 @@
-# ATT&CK Data Schema Analyzer
+# Multi-Framework Cybersecurity Data Analyzer
 
-A specialized Streamlit application for analyzing and exploring the raw MITRE ATT&CK data structure, schema, and relationships. This tool is designed to help with documentation, data modeling, and understanding the complete ATT&CK framework structure.
+A comprehensive Streamlit application for analyzing and exploring cybersecurity framework data structures, schemas, and relationships across multiple standards. This tool provides deep insights into framework architectures and supports cross-framework analysis.
 
 ## 🎯 Purpose
 
 This analyzer is specifically created for:
 
-- **Schema Documentation**: Understanding the complete data structure
-- **Research & Analysis**: Deep diving into ATT&CK object relationships
-- **Data Modeling**: Planning database schemas and integrations
-- **Documentation**: Generating comprehensive schema documentation
+- **Multi-Framework Schema Documentation**: Understanding complete data structures across all supported frameworks
+- **Cross-Framework Research**: Analyzing relationships and mappings between different standards
+- **Data Modeling**: Planning database schemas and multi-framework integrations
+- **Compliance Documentation**: Generating comprehensive framework documentation
+- **Framework Comparison**: Side-by-side analysis of different cybersecurity standards
+
+## 🚀 Supported Frameworks
+
+### 🔍 MITRE ATT&CK
+
+- **Enterprise, Mobile, ICS datasets**
+- Complete object type analysis (techniques, tactics, groups, malware, etc.)
+- Relationship mapping and visualization
+- Real-time data fetching from MITRE repository
+
+### 🛡️ CIS Controls v8.1
+
+- Critical security controls structure
+- Safeguards and implementation groups
+- Control-to-technique mappings
+
+### 📋 NIST Cybersecurity Framework 2.0
+
+- Functions, categories, and subcategories hierarchy
+- Risk management structure analysis
+- Framework implementation guidance
+
+### 🏥 HIPAA Administrative Simplification
+
+- Regulatory compliance requirements
+- Healthcare information security standards
+- Privacy and security rule analysis
+
+### 🏦 FFIEC IT Examination Handbook
+
+- Financial institution examination procedures
+- Information security guidance structure
+- Regulatory compliance requirements
+
+### � PCI DSS v4.0.1
+
+- Payment card industry security standards
+- Data protection requirements analysis
+- Compliance validation procedures
 
 ## 🚀 Features
 
-### 📊 Dataset Overview
+### 📊 Framework Overview
 
-- Complete statistics for Enterprise, Mobile, and ICS ATT&CK datasets
-- Object type distribution visualization
-- Basic dataset metadata analysis
+- Complete statistics for all supported frameworks
+- Framework type classification and source attribution
+- Document availability and status checking
+- Framework metadata analysis
 
-### 🎯 Object Type Analysis
+### 🎯 Multi-Framework Analysis
 
-- Detailed analysis of each ATT&CK object type
-- Sample object examination
-- Object listing and filtering
+- **ATT&CK Deep Dive**: Object types, relationships, schema analysis
+- **Framework Structure**: Document parsing and hierarchy analysis
+- **Schema Comparison**: Cross-framework data model comparison
+- **Citation Tracking**: Source document verification and references
 
 ### 🔬 Schema Deep Dive
 
-- Complete property schema for each object type
-- Property frequency analysis
-- Data type identification
-- Property coverage statistics
+- Complete property schema for each framework
+- Data structure documentation
+- Cross-framework relationship mapping
+- Implementation guidance analysis
 
-### 🔗 Relationship Analysis
+### 🔗 Cross-Framework Relationships
 
-- Relationship type distribution
-- Source/target object mapping
-- Relationship pattern analysis
+- Framework interoperability analysis
+- Compliance mapping opportunities
+- Control-to-technique relationships
+- Regulatory alignment assessment
 
 ### 📄 Export Documentation
 
-- Generate Markdown documentation
-- Export analysis data as JSON
+- Generate comprehensive framework documentation
+- Export analysis data in multiple formats
 - Schema documentation for integration planning
+- Cross-framework mapping reports
 
 ## 🛠️ Installation & Usage
 
@@ -52,13 +96,30 @@ This analyzer is specifically created for:
 python -m pip install -r analyzer_requirements.txt
 ```
 
+### Document Setup
+
+Ensure the following framework documents are available in the `documents/` folder:
+
+- `CIS_Controls__v8.1_Guide__2024_06.pdf` - CIS Controls v8.1 Guide
+- `NIST.CSWP.29.pdf` - NIST Cybersecurity Framework 2.0
+- `hipaa-simplification-201303.pdf` - HIPAA Administrative Simplification
+- `2016- it-handbook-information-security-booklet.pdf` - FFIEC IT Handbook
+- `PCI-DSS-v4_0_1.pdf` - PCI DSS v4.0.1 Standard
+
 ### Running the Analyzer
 
 ```bash
-streamlit run attack_data_analyzer.py
+streamlit run data_analyzer.py
 ```
 
 The application will be available at `http://localhost:8501`
+
+### Framework Selection
+
+1. **Select Framework**: Choose from ATT&CK, CIS, NIST, HIPAA, FFIEC, or PCI DSS
+2. **Choose Analysis Mode**: Select the type of analysis to perform
+3. **ATT&CK Dataset**: For ATT&CK, choose Enterprise, Mobile, or ICS
+4. **Refresh Data**: Update framework data when needed
 
 ## 📋 Analysis Modes
 

@@ -1,9 +1,17 @@
+# Core Framework Dependencies
 streamlit
-langchain-google-genai
-langchain-core
 neo4j
 python-dotenv
-mitreattack-python
-requests
+
+# LLM and AI Dependencies
+langchain-google-genai
+langchain-core
+
+# Data Processing Dependencies
+PyPDF2
 pandas
+requests
+
+# Visualization and Monitoring
+plotly
 watchdog
