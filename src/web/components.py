@@ -5,8 +5,8 @@ import streamlit as st
 
 from src.knowledge_base.graph_operations import (
     get_context_from_knowledge_base, get_selective_context_from_knowledge_base, 
-    get_attack_statistics, get_techniques_by_tactic, get_threat_group_techniques, 
-    search_by_technique_id, get_all_tactics, get_all_threat_groups
+    get_framework_aware_context, get_attack_statistics, get_techniques_by_tactic, 
+    get_threat_group_techniques, search_by_technique_id, get_all_tactics, get_all_threat_groups
 )
 from src.api.llm_service import chat_with_knowledge_base, analyze_user_query
 from src.utils.initialization import refresh_knowledge_base, ingest_individual_framework
@@ -55,37 +55,66 @@ def chat_tab(graph, llm):
         st.session_state.messages.append({"role": "user", "content": user_input})
         
         # Get AI response based on selected search mode and framework scope
-        with st.spinner("Analyzing multi-framework cybersecurity data..."):
+        with st.spinner(f"Analyzing {framework_scope} cybersecurity data..."):
             if search_mode == "Smart Selective Search":
-                # Step 1: Analyze the user query to determine relevant object types
-                with st.spinner("🔍 Analyzing your question across frameworks..."):
-                    query_analysis = analyze_user_query(llm, user_input)
+                # Step 1: Analyze the user query to determine relevant object types within framework scope
+                with st.spinner(f"🔍 Analyzing your question for {framework_scope}..."):
+                    query_analysis = analyze_user_query(llm, user_input, framework_scope)
                 
-                # Step 2: Get selective context from the knowledge base
-                with st.spinner(f"📊 Searching {', '.join(query_analysis['relevant_types'])}..."):
-                    context = get_selective_context_from_knowledge_base(
+                # Step 2: Get selective context from the knowledge base with framework filtering
+                with st.spinner(f"📊 Searching {', '.join(query_analysis['relevant_types'])} in {framework_scope}..."):
+                    context = get_framework_aware_context(
                         graph, 
                         query_analysis['keywords'], 
-                        query_analysis['relevant_types']
+                        query_analysis['relevant_types'],
+                        framework_scope
                     )
                 
-                # Step 3: Generate response using LLM
-                with st.spinner("🤖 Generating response..."):
-                    response = chat_with_knowledge_base(llm, context, user_input)
+                # Step 3: Generate framework-specific response using LLM
+                with st.spinner("🤖 Generating framework-specific response..."):
+                    response = chat_with_knowledge_base(llm, context, user_input, framework_scope)
                     
                 # Add analysis info to response (for transparency)
-                analysis_info = f"\n\n---\n*🎯 Query Focus: {query_analysis['focus']}*\n*🔍 Searched: {', '.join(query_analysis['relevant_types'])}*\n*📝 Keywords: {', '.join(query_analysis['keywords'])}*"
+                analysis_info = f"\n\n---\n*🎯 Framework: {framework_scope}*\n*🔍 Query Focus: {query_analysis['focus']}*\n*� Searched: {', '.join(query_analysis['relevant_types'])}*\n*📝 Keywords: {', '.join(query_analysis['keywords'])}*"
                 response = response + analysis_info
                 
             else:  # Comprehensive Search
-                # Use the original comprehensive search
-                with st.spinner("📊 Searching all ATT&CK object types..."):
-                    context = get_context_from_knowledge_base(graph, user_input)
+                # Use comprehensive search across ALL object types within framework scope
+                with st.spinner(f"📊 Searching ALL {framework_scope} object types comprehensively..."):
+                    # For comprehensive search, include all possible object types for the framework
+                    if framework_scope == "ATT&CK Only":
+                        all_types = ["techniques", "malware", "threat_groups", "tools", "mitigations", "data_sources", "campaigns"]
+                    elif framework_scope == "CIS Controls":
+                        all_types = ["cis_controls", "cis_safeguards", "implementation_groups"]
+                    elif framework_scope == "NIST CSF":
+                        all_types = ["nist_functions", "nist_categories", "nist_subcategories"]
+                    elif framework_scope == "HIPAA":
+                        all_types = ["hipaa_regulations", "hipaa_sections", "hipaa_requirements"]
+                    elif framework_scope == "FFIEC":
+                        all_types = ["ffiec_categories", "ffiec_procedures", "ffiec_guidance"]
+                    elif framework_scope == "PCI DSS":
+                        all_types = ["pci_requirements", "pci_procedures", "pci_controls"]
+                    else:  # All Frameworks
+                        all_types = ["techniques", "malware", "threat_groups", "tools", "mitigations", 
+                                   "cis_controls", "cis_safeguards", "nist_functions", "nist_categories",
+                                   "hipaa_regulations", "hipaa_sections", "pci_requirements"]
+                    
+                    # Extract keywords from user input for comprehensive search
+                    keywords = [word.strip() for word in user_input.split() if len(word.strip()) > 2][:5]
+                    
+                    context = get_framework_aware_context(
+                        graph, 
+                        keywords,
+                        all_types,
+                        framework_scope
+                    )
                 
-                with st.spinner("🤖 Generating response..."):
-                    response = chat_with_knowledge_base(llm, context, user_input)
-                
-                response = response + "\n\n---\n*🔍 Used comprehensive search across all ATT&CK object types*"
+                with st.spinner("🤖 Generating comprehensive response..."):
+                    response = chat_with_knowledge_base(llm, context, user_input, framework_scope)
+                    
+                # Add framework info to response
+                framework_info = f"\n\n---\n*🎯 Framework: {framework_scope}*\n*🔍 Search Mode: Comprehensive (all {len(all_types)} object types)*\n*📊 Object Types: {', '.join(all_types)}*"
+                response = response + framework_info
         
         # Add assistant response to chat history
         st.session_state.messages.append({"role": "assistant", "content": response})

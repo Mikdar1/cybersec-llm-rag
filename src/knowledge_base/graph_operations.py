@@ -673,3 +673,284 @@ def get_technique_data_sources(graph, technique_id):
         
     except Exception as e:
         raise Exception(f"Error getting technique data sources: {e}")
+
+# Framework to node type mapping
+FRAMEWORK_NODE_MAPPING = {
+    "ATT&CK Only": {
+        "techniques": "Technique",
+        "malware": "Malware", 
+        "threat_groups": "ThreatGroup",
+        "tools": "Tool",
+        "mitigations": "Mitigation",
+        "data_sources": "DataSource",
+        "campaigns": "Campaign"
+    },
+    "CIS Controls": {
+        "cis_controls": "CIS_Control",
+        "cis_safeguards": "CIS_Safeguard",
+        "implementation_groups": "CIS_ImplementationGroup"
+    },
+    "NIST CSF": {
+        "nist_functions": "NIST_Function",
+        "nist_categories": "NIST_Category", 
+        "nist_subcategories": "NIST_Subcategory"
+    },
+    "HIPAA": {
+        "hipaa_regulations": "HIPAA_Regulation",
+        "hipaa_sections": "HIPAA_Section",
+        "hipaa_requirements": "HIPAA_Requirement"
+    },
+    "FFIEC": {
+        "ffiec_categories": "FFIEC_Category",
+        "ffiec_procedures": "FFIEC_Procedure",
+        "ffiec_guidance": "FFIEC_Guidance"
+    },
+    "PCI DSS": {
+        "pci_requirements": "PCI_Requirement",
+        "pci_procedures": "PCI_Procedure", 
+        "pci_controls": "PCI_Control"
+    }
+}
+
+
+def get_framework_aware_context(graph, keywords, relevant_types, framework_scope="All Frameworks"):
+    """
+    Retrieve framework-specific context from the knowledge base.
+    
+    Args:
+        graph: Neo4j database connection instance
+        keywords (list): List of search keywords/terms
+        relevant_types (list): List of object types to search
+        framework_scope (str): Framework scope for filtering
+        
+    Returns:
+        str: Structured context data organized by framework and object type
+    """
+    try:
+        context = []
+        
+        # Create keyword search conditions
+        keyword_conditions = []
+        for keyword in keywords:
+            keyword_conditions.extend([
+                f"toLower({{field}}) CONTAINS toLower('{keyword}')",
+                f"'{keyword.upper()}' IN {{field}}"
+            ])
+        
+        # Determine which frameworks to search
+        if framework_scope == "All Frameworks":
+            frameworks_to_search = FRAMEWORK_NODE_MAPPING.keys()
+        else:
+            frameworks_to_search = [framework_scope]
+        
+        for framework in frameworks_to_search:
+            if framework not in FRAMEWORK_NODE_MAPPING:
+                continue
+                
+            framework_mapping = FRAMEWORK_NODE_MAPPING[framework]
+            framework_context = []
+            
+            for obj_type in relevant_types:
+                if obj_type in framework_mapping:
+                    node_label = framework_mapping[obj_type]
+                    
+                    # Build dynamic query based on node type
+                    if framework == "ATT&CK Only":
+                        results = _search_attack_objects(graph, node_label, keyword_conditions, obj_type)
+                    elif framework == "CIS Controls":
+                        results = _search_cis_objects(graph, node_label, keyword_conditions, obj_type)
+                    elif framework == "NIST CSF":
+                        results = _search_nist_objects(graph, node_label, keyword_conditions, obj_type)
+                    elif framework == "HIPAA":
+                        results = _search_hipaa_objects(graph, node_label, keyword_conditions, obj_type)
+                    else:
+                        results = _search_generic_objects(graph, node_label, keyword_conditions, obj_type)
+                    
+                    if results:
+                        framework_context.extend(results)
+            
+            if framework_context:
+                context.append(f"\n=== {framework.upper()} FRAMEWORK ===")
+                context.extend(framework_context)
+        
+        return "\n".join(context) if context else f"No relevant information found for '{', '.join(keywords)}' in {framework_scope}."
+        
+    except Exception as e:
+        return f"Error retrieving context: {e}"
+
+
+def _search_attack_objects(graph, node_label, keyword_conditions, obj_type):
+    """Search ATT&CK objects with specific formatting."""
+    results = []
+    
+    if obj_type == "techniques":
+        query = f"""
+        MATCH (n:{node_label})
+        WHERE """ + " OR ".join([
+            cond.format(field="n.name") for cond in keyword_conditions
+        ] + [
+            cond.format(field="n.description") for cond in keyword_conditions
+        ] + [
+            cond.format(field="n.technique_id") for cond in keyword_conditions
+        ]) + """
+        RETURN n.technique_id as id, n.name as name, n.description as description, 
+               n.tactics as tactics, n.platforms as platforms
+        LIMIT 3
+        """
+        
+        technique_results = graph.query(query)
+        for result in technique_results:
+            results.append(f"\n🎯 Technique: {result['id']} - {result['name']}")
+            results.append(f"   Tactics: {', '.join(result.get('tactics', []))}")
+            results.append(f"   Description: {result['description'][:200]}...")
+    
+    elif obj_type == "malware":
+        query = f"""
+        MATCH (n:{node_label})
+        WHERE """ + " OR ".join([
+            cond.format(field="n.name") for cond in keyword_conditions
+        ] + [
+            cond.format(field="n.description") for cond in keyword_conditions
+        ]) + """
+        RETURN n.name as name, n.description as description, n.labels as labels
+        LIMIT 3
+        """
+        
+        malware_results = graph.query(query)
+        for result in malware_results:
+            results.append(f"\n🦠 Malware: {result['name']}")
+            results.append(f"   Type: {', '.join(result.get('labels', []))}")
+            results.append(f"   Description: {result['description'][:200]}...")
+    
+    # Add similar patterns for other ATT&CK object types...
+    
+    return results
+
+
+def _search_cis_objects(graph, node_label, keyword_conditions, obj_type):
+    """Search CIS Controls objects with specific formatting."""
+    results = []
+    
+    if obj_type == "cis_controls":
+        query = f"""
+        MATCH (n:{node_label})
+        WHERE """ + " OR ".join([
+            cond.format(field="n.title") for cond in keyword_conditions
+        ] + [
+            cond.format(field="n.description") for cond in keyword_conditions
+        ] + [
+            cond.format(field="n.control_id") for cond in keyword_conditions
+        ]) + """
+        RETURN n.control_id as id, n.title as title, n.description as description,
+               n.asset_type as asset_type, n.security_function as security_function
+        LIMIT 3
+        """
+        
+        control_results = graph.query(query)
+        for result in control_results:
+            results.append(f"\n🛡️ CIS Control {result['id']}: {result['title']}")
+            results.append(f"   Asset Type: {result.get('asset_type', 'N/A')}")
+            results.append(f"   Security Function: {result.get('security_function', 'N/A')}")
+            results.append(f"   Description: {result['description'][:200]}...")
+    
+    return results
+
+
+def _search_nist_objects(graph, node_label, keyword_conditions, obj_type):
+    """Search NIST CSF objects with specific formatting."""
+    results = []
+    
+    if obj_type == "nist_functions":
+        query = f"""
+        MATCH (n:{node_label})
+        WHERE """ + " OR ".join([
+            cond.format(field="n.name") for cond in keyword_conditions
+        ] + [
+            cond.format(field="n.description") for cond in keyword_conditions
+        ] + [
+            cond.format(field="n.id") for cond in keyword_conditions
+        ]) + """
+        RETURN n.id as id, n.name as name, n.description as description
+        LIMIT 3
+        """
+        
+        function_results = graph.query(query)
+        for result in function_results:
+            results.append(f"\n📋 NIST Function {result['id']}: {result['name']}")
+            results.append(f"   Description: {result['description'][:200]}...")
+    
+    elif obj_type == "nist_categories":
+        query = f"""
+        MATCH (n:{node_label})
+        WHERE """ + " OR ".join([
+            cond.format(field="n.name") for cond in keyword_conditions
+        ] + [
+            cond.format(field="n.description") for cond in keyword_conditions
+        ] + [
+            cond.format(field="n.id") for cond in keyword_conditions
+        ]) + """
+        RETURN n.id as id, n.name as name, n.description as description
+        LIMIT 3
+        """
+        
+        category_results = graph.query(query)
+        for result in category_results:
+            results.append(f"\n📂 NIST Category {result['id']}: {result['name']}")
+            results.append(f"   Description: {result['description'][:200]}...")
+    
+    return results
+
+
+def _search_hipaa_objects(graph, node_label, keyword_conditions, obj_type):
+    """Search HIPAA objects with specific formatting."""
+    results = []
+    
+    if obj_type == "hipaa_regulations":
+        query = f"""
+        MATCH (n:{node_label})
+        WHERE """ + " OR ".join([
+            cond.format(field="n.title") for cond in keyword_conditions
+        ] + [
+            cond.format(field="n.description") for cond in keyword_conditions
+        ] + [
+            cond.format(field="n.regulation_id") for cond in keyword_conditions
+        ]) + """
+        RETURN n.regulation_id as id, n.title as title, n.description as description,
+               n.category as category
+        LIMIT 3
+        """
+        
+        regulation_results = graph.query(query)
+        for result in regulation_results:
+            results.append(f"\n🏥 HIPAA Regulation {result['id']}: {result['title']}")
+            results.append(f"   Category: {result.get('category', 'N/A')}")
+            results.append(f"   Description: {result['description'][:200]}...")
+    
+    return results
+
+
+def _search_generic_objects(graph, node_label, keyword_conditions, obj_type):
+    """Generic search for other framework objects."""
+    results = []
+    
+    try:
+        query = f"""
+        MATCH (n:{node_label})
+        WHERE """ + " OR ".join([
+            cond.format(field="n.name") for cond in keyword_conditions[:2]  # Limit conditions for safety
+        ]) + """
+        RETURN n.id as id, n.name as name, n.description as description
+        LIMIT 3
+        """
+        
+        generic_results = graph.query(query)
+        for result in generic_results:
+            results.append(f"\n📋 {obj_type}: {result.get('name', result.get('id', 'Unknown'))}")
+            if result.get('description'):
+                results.append(f"   Description: {result['description'][:200]}...")
+    
+    except Exception:
+        # Fallback for objects with different property names
+        pass
+    
+    return results
