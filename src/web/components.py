@@ -45,7 +45,7 @@ def chat_tab(graph, llm):
                 st.markdown(f'<div class="assistant-message">🤖 {message["content"]}</div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
     else:
-        st.info("💡 Start a conversation by asking about any cybersecurity framework. Examples: 'Tell me about T1055 Process Injection', 'What are CIS Control 1 safeguards?', 'Explain NIST CSF Protect function', 'What are HIPAA privacy requirements?'")
+        st.info("💡 Start a conversation by asking about any cybersecurity framework. Examples: 'Tell me about T1055 Process Injection', 'What are CIS Control 1?', 'Explain NIST CSF Protect function', 'What are HIPAA privacy requirements?'")
     
     # Chat input
     user_input = st.chat_input("Ask me anything about cybersecurity frameworks...")
